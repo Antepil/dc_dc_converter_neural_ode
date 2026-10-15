@@ -1,0 +1,14 @@
+{
+  "name": "soft_idle_loss",
+  "idle_profile": "soft_idle_loss",
+  "event_update": {
+    "type": "identity",
+    "project_current_to_zero": false
+  },
+  "loss_weights": {
+    "event_current": 1.0,
+    "idle_state": 1.0,
+    "idle_tangent": 0.1,
+    "idle_end": 1.0
+  }
+}

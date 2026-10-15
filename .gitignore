@@ -1,0 +1,24 @@
+# Python/macOS caches
+**/.DS_Store
+**/__pycache__/
+**/*.pyc
+
+# MATLAB/Simulink caches
+**/*.slxc
+**/slprj/
+
+# Full copied datasets and training outputs stay local
+**/data/
+**/artifacts/
+**/train.log
+
+# One-time migration verification evidence
+.migration/
+
+# Project-local agent and MCP downloads
+.tools/
+.pi/mcp-logs/
+# Local runtime/config and tool state
+.mcp.json
+**/.venv/
+.pi/

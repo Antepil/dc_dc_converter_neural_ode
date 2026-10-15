@@ -1,0 +1,426 @@
+{
+  "config_version": "3.0.0",
+  "config_status": "experimental",
+  "run_profile": "formal",
+  "config_notes": [
+    "唯一活动 schema 为 hybrid_event_matlab_v3，与 known_pwm_matlab_v2 不兼容。",
+    "固定 R=80 ohm，仅支持每个记录周期恰好一次 OFF_DIODE 到 IDLE 自然事件的 DCM 数据。",
+    "PWM 边沿是已知网格事件；自然二极管截止只由可学习神经事件函数定位。",
+    "自然事件使用恒等状态映射，不将 iL 投影到零。",
+    "正式对照仅包含 soft_idle_loss 和 hard_idle_constraint。",
+    "默认训练采用输入电压相对状态归一化：网络输入 x/(Vin/32)，ON/OFF/事件保留 Vin/32 条件；神经导数乘 Vin/32 还原。损失与评估保持固定参考坐标。"
+  ],
+  "circuit": {
+    "inductance_h": 0.0005,
+    "capacitance_f": 0.0001,
+    "load_ohm": 80.0,
+    "switching_frequency_hz": 20000.0,
+    "duty_cycle": 0.5
+  },
+  "dataset": {
+    "schema_version": "hybrid_event_matlab_v3",
+    "dataset_version": "hybrid_event_matlab_v3",
+    "samples_per_cycle": 100,
+    "candidate_multiplier": 10,
+    "initial_current_factor": [
+      0.75,
+      1.35
+    ],
+    "initial_voltage_factor": [
+      1.22,
+      1.3
+    ],
+    "noise_enabled": false,
+    "event_detection": {
+      "diode_on_threshold_a": 2e-05,
+      "diode_off_threshold_a": 1e-05,
+      "event_current_abs_tol_a": 0.0001,
+      "idle_current_abs_tol_a": 0.0001,
+      "negative_current_abs_tol_a": 0.0001,
+      "idle_diode_current_abs_tol_a": 1e-05,
+      "event_guard_time_s": 1e-07,
+      "dcm_margin_tau": 0.02,
+      "gate_edge_time_abs_tol_s": 1e-12
+    },
+    "splits": {
+      "train": {
+        "voltages_v": [
+          12,
+          16,
+          20,
+          24,
+          28,
+          32
+        ],
+        "trajectories_per_voltage": 12,
+        "cycles": 20,
+        "data_seed": 20260803
+      },
+      "validation": {
+        "voltages_v": [
+          14,
+          22,
+          30
+        ],
+        "trajectories_per_voltage": 6,
+        "cycles": 20,
+        "data_seed": 20260813
+      },
+      "test_seen": {
+        "voltages_v": [
+          12,
+          16,
+          20,
+          24,
+          28,
+          32
+        ],
+        "trajectories_per_voltage": 6,
+        "cycles": 200,
+        "data_seed": 20260823
+      },
+      "test_interpolation": {
+        "voltages_v": [
+          13,
+          15,
+          17,
+          18,
+          19,
+          21,
+          23,
+          25,
+          26,
+          27,
+          29,
+          31
+        ],
+        "trajectories_per_voltage": 3,
+        "cycles": 200,
+        "data_seed": 20260902
+      },
+      "test_voltage_extrapolation": {
+        "voltages_v": [
+          10,
+          34,
+          36
+        ],
+        "trajectories_per_voltage": 6,
+        "cycles": 200,
+        "data_seed": 20260912
+      },
+      "test_extrapolation_high": {
+        "voltages_v": [
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80
+        ],
+        "trajectories_per_voltage": 3,
+        "cycles": 200,
+        "data_seed": 20260920
+      }
+    }
+  },
+  "matlab": {
+    "model": "buck_ideal_hybrid",
+    "solver": "ode23t",
+    "relative_tolerance": 1e-08,
+    "absolute_tolerance": "auto",
+    "auto_scale_abs_tol": true,
+    "max_step_s": 5e-08,
+    "zero_crossing_algorithm": "Nonadaptive",
+    "signal_logging_variable": "logsout",
+    "logging_decimation": 1,
+    "powergui_mode": "Continuous",
+    "device_library": "Simscape Electrical",
+    "diode": {
+      "model_type": "piecewise_linear",
+      "Ron_ohm": 0.0001,
+      "Vf_v": 0.0001,
+      "Goff_siemens": 1e-08,
+      "junction_capacitance_pf": 0.0,
+      "reverse_recovery": "off"
+    },
+    "mosfet": {
+      "model_type": "ideal_switching",
+      "Rds_on_ohm": 0.0001,
+      "Goff_siemens": 1e-08,
+      "threshold_voltage_v": 0.5,
+      "body_diode_mode": "external"
+    }
+  },
+  "normalization": {
+    "current_ref_a": 1.0,
+    "voltage_ref_v": 32.0,
+    "input_voltage_ref_v": 32.0,
+    "time_ref_s": 5e-05
+  },
+  "model": {
+    "architecture": "neural_event_hybrid_ode",
+    "continuous_state": [
+      "iL_norm",
+      "vC_norm"
+    ],
+    "discrete_modes": {
+      "ON": 0,
+      "OFF_DIODE": 1,
+      "IDLE": 2
+    },
+    "vector_fields": {
+      "on": {
+        "input_spec": [
+          "iL_relative",
+          "vC_over_vS",
+          "vS_norm"
+        ],
+        "input_dim": 3,
+        "hidden_width": 64,
+        "hidden_layers": 2,
+        "activation": "tanh",
+        "output_dim": 2
+      },
+      "off": {
+        "input_spec": [
+          "iL_relative",
+          "vC_over_vS",
+          "vS_norm"
+        ],
+        "input_dim": 3,
+        "hidden_width": 64,
+        "hidden_layers": 2,
+        "activation": "tanh",
+        "output_dim": 2
+      },
+      "idle": {
+        "input_spec": [
+          "iL_relative",
+          "vC_over_vS"
+        ],
+        "input_dim": 2,
+        "hidden_width": 64,
+        "hidden_layers": 2,
+        "activation": "tanh",
+        "output_dim": 2
+      }
+    },
+    "event_network": {
+      "input_spec": [
+        "iL_relative",
+        "vC_over_vS",
+        "vS_norm"
+      ],
+      "input_dim": 3,
+      "hidden_width": 64,
+      "hidden_layers": 2,
+      "activation": "tanh",
+      "output_dim": 1,
+      "uses_absolute_time": false,
+      "uses_pwm_phase": false
+    },
+    "initialization": {
+      "linear_weights": "xavier_normal",
+      "bias": "zeros"
+    },
+    "event_update": {
+      "type": "identity",
+      "project_current_to_zero": false
+    },
+    "load_is_network_input": false,
+    "supported_idle_profiles": [
+      "soft_idle_loss",
+      "hard_idle_constraint"
+    ],
+    "network_normalization": "input_voltage_relative"
+  },
+  "integrator": {
+    "method": "batched_hybrid_rk4",
+    "step_size_tau": 0.01,
+    "half_step_size_tau": 0.005,
+    "event_mode": "neural",
+    "event_monitor_mode": "OFF_DIODE",
+    "event_root_refinement": "differentiable_secant",
+    "secant_refinement_iterations": 2,
+    "event_fraction_clip": [
+      0.0,
+      1.0
+    ],
+    "max_natural_events_per_cycle": 1,
+    "pwm_events_align_to_grid": true,
+    "state_linear_interpolation_at_event": false,
+    "event_update": "identity",
+    "missed_event_behavior": "remain_off_until_next_pwm_rising_edge"
+  },
+  "runtime": {
+    "raw_dtype": "float64",
+    "processed_dtype": "float64",
+    "training_dtype": "float32",
+    "device": "auto",
+    "amp_enabled": false,
+    "float16_enabled": false,
+    "quantization_enabled": false
+  },
+  "training": {
+    "optimizer": "adamw",
+    "weight_decay": 1e-06,
+    "gradient_clip_norm": 5.0,
+    "checkpoint_interval_epochs": 2,
+    "learning_rate_scheduler": {
+      "type": "reduce_on_plateau",
+      "patience_epochs": 10,
+      "factor": 0.5
+    },
+    "early_stopping_patience_epochs": 30,
+    "minimum_relative_improvement_fraction": 0.005,
+    "model_seeds": [
+      20260804,
+      20260805,
+      20260806
+    ],
+    "event_pretraining": {
+      "guard_margin": 0.01,
+      "counterfactual_offsets_tau": [
+        0.0025,
+        0.005,
+        0.01
+      ],
+      "validation_gate": {
+        "event_detection_rate_min": 0.99,
+        "event_time_mae_tau_max": 0.01,
+        "nonpositive_off_start_guard_rate_max": 0.0,
+        "exactly_one_root_rate_min": 1.0,
+        "event_before_next_pwm_rate_min": 1.0
+      }
+    },
+    "stages": [
+      {
+        "name": "mode_dynamics",
+        "window_cycles": null,
+        "max_epochs": 200,
+        "batch_size": 256,
+        "vector_field_learning_rate": 0.001,
+        "event_network_learning_rate": null
+      },
+      {
+        "name": "event_pretrain",
+        "window_cycles": null,
+        "max_epochs": 600,
+        "early_stopping_patience_epochs": 600,
+        "batch_size": 512,
+        "vector_field_learning_rate": null,
+        "event_network_learning_rate": 0.0005
+      },
+      {
+        "name": "one_cycle",
+        "window_cycles": 1,
+        "max_epochs": 200,
+        "batch_size": 64,
+        "vector_field_learning_rate": 0.0002,
+        "event_network_learning_rate": 0.0001
+      },
+      {
+        "name": "five_cycle",
+        "window_cycles": 5,
+        "max_epochs": 130,
+        "batch_size": 16,
+        "vector_field_learning_rate": 0.0001,
+        "event_network_learning_rate": 5e-05
+      },
+      {
+        "name": "ten_cycle",
+        "window_cycles": 10,
+        "max_epochs": 80,
+        "batch_size": 8,
+        "vector_field_learning_rate": 0.0001,
+        "event_network_learning_rate": 5e-05
+      },
+      {
+        "name": "twenty_cycle",
+        "window_cycles": 20,
+        "max_epochs": 60,
+        "batch_size": 4,
+        "vector_field_learning_rate": 5e-05,
+        "event_network_learning_rate": 2.5e-05
+      }
+    ],
+    "loss_weights": {
+      "state": 1.0,
+      "event_time": 1.0,
+      "guard": 0.1,
+      "event_current": 1.0,
+      "idle_state": 1.0,
+      "idle_tangent": 0.1,
+      "idle_end": 1.0,
+      "ripple": 0.0001
+    },
+    "ripple_loss": {
+      "enabled_stage": "twenty_cycle",
+      "state": "capacitor_voltage",
+      "detrend": "linear_endpoints",
+      "metric": "relative_ptp_squared"
+    },
+    "smoke": {
+      "epochs_per_stage": 1,
+      "must_include_voltage_regions": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "must_include_asynchronous_events": true
+    },
+    "derivative_method": "central"
+  },
+  "experiments": {
+    "default": "soft_idle_loss",
+    "allowed": [
+      "soft_idle_loss",
+      "hard_idle_constraint"
+    ],
+    "config_directory": "experiments"
+  },
+  "evaluation": {
+    "rollout_cycles": [
+      1,
+      10,
+      20,
+      50,
+      200
+    ],
+    "steady_state_tail_cycles": 20,
+    "report_by_input_voltage": true,
+    "report_by_initial_state_bin": true,
+    "test_extrapolation_high_is_core_gate": false,
+    "acceptance": {
+      "validation_normalized_rmse_max": 0.01,
+      "test_seen_rmse_max": 0.02,
+      "test_interpolation_rmse_max": 0.03,
+      "test_voltage_extrapolation_rmse_max": 0.05,
+      "ripple_mean_relative_error_max": 0.1,
+      "ripple_p95_relative_error_max": 0.2,
+      "event_miss_rate_max": 0.01,
+      "exactly_one_event_rate_min": 0.99,
+      "event_at_boundary_rate_max": 0.0,
+      "event_time_mae_tau_max": 0.005,
+      "event_time_p95_tau_max": 0.01,
+      "event_current_mean_a_max": 0.01,
+      "event_current_p95_a_max": 0.02,
+      "idle_current_mean_a_max": 0.01,
+      "idle_current_p95_a_max": 0.02,
+      "idle_end_current_mean_a_max": 0.01,
+      "idle_end_current_p95_a_max": 0.02,
+      "extra_roots_per_off_max": 0,
+      "nonpositive_off_start_guard_rate_max": 0.0,
+      "half_step_event_time_mean_delta_tau_max": 0.002,
+      "half_step_rmse_percentage_point_delta_max": 0.1,
+      "half_step_event_existence_change_rate_max": 0.005,
+      "nonfinite_state_count_max": 0
+    },
+    "seed_gate": {
+      "all_seeds_must_pass_event_safety": true,
+      "minimum_seeds_passing_all_waveform_gates": 2,
+      "report_mean_std_and_worst_seed": true
+    }
+  }
+}
